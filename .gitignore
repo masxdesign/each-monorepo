@@ -27,6 +27,5 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Ignore apps and packages - they will be Git submodules
-apps/
-packages/
+# Apps and packages are Git submodules
+# They are tracked via .gitmodules file

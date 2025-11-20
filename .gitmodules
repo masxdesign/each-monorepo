@@ -1,0 +1,12 @@
+[submodule "apps/backend/bizchat"]
+	path = apps/backend/bizchat
+	url = https://github.com/eachcorp/4prop-bizchat.git
+[submodule "apps/backend/property-pub"]
+	path = apps/backend/property-pub
+	url = https://github.com/eachcorp/property-pub-web.git
+[submodule "apps/frontend/property-pub-react"]
+	path = apps/frontend/property-pub-react
+	url = git@github.com:masxdesign/react-4prop-agentb.git
+[submodule "packages/backend-shared/oauth"]
+	path = packages/backend-shared/oauth
+	url = https://github.com/masxdesign/4prop-oauth-plugin.git
