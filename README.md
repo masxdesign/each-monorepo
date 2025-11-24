@@ -383,7 +383,12 @@ git submodule update
 ### Workspace dependencies not found
 
 ```bash
+# Linux
 rm -rf node_modules package-lock.json
+
+# Windows
+Remove-Item -Recurse -Force node_modules, package-lock.json
+
 npm install
 ```
 
