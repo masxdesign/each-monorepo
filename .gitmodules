@@ -10,3 +10,6 @@
 [submodule "packages/backend-shared/oauth"]
 	path = packages/backend-shared/oauth
 	url = https://github.com/masxdesign/4prop-oauth-plugin.git
+[submodule "apps/frontend/4prop-crm-react"]
+	path = apps/frontend/4prop-crm-react
+	url = https://github.com/masxdesign/react-4prop-crm.git
