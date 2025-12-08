@@ -13,3 +13,6 @@
 [submodule "apps/frontend/4prop-crm-react"]
 	path = apps/frontend/4prop-crm-react
 	url = https://github.com/masxdesign/react-4prop-crm.git
+[submodule "apps/swa/shopproperty-swa"]
+	path = apps/swa/shopproperty-swa
+	url = https://github.com/eachcorp/shopproperty-swa.git
