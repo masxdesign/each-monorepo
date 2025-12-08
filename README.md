@@ -10,8 +10,11 @@ EACH/
 │   ├── backend/
 │   │   ├── bizchat/           # BizChat backend API
 │   │   └── property-pub/      # Property Publishing backend API
-│   └── frontend/
-│       └── property-pub-react/ # Property Publishing React frontend
+│   ├── frontend/
+│   │   ├── property-pub-react/ # Property Publishing React frontend
+│   │   └── 4prop-crm-react/    # 4prop CRM React frontend
+│   └── swa/
+│       └── shopproperty-swa/   # Shop Property Static Web App
 └── packages/
     └── backend-shared/
         └── oauth/              # Shared OAuth authentication plugin
@@ -69,6 +72,14 @@ npm ls --workspaces --depth=0
 - **property-pub-react** - Property publishing React frontend
   - Repo: git@github.com:masxdesign/react-4prop-agentb.git
 
+- **4prop-crm-react** - 4prop CRM React frontend
+  - Repo: https://github.com/masxdesign/react-4prop-crm.git
+
+### Static Web Apps (SWA)
+
+- **shopproperty-swa** - Shop Property Static Web App
+  - Repo: https://github.com/eachcorp/shopproperty-swa.git
+
 ### Shared Packages
 
 - **@4prop/oauth** - OAuth authentication plugin for Express.js
@@ -96,6 +107,11 @@ git pull origin main
 cd ../../..
 git add apps/backend/bizchat
 git commit -m "Update bizchat submodule"
+
+# Remove any existing workspace lockfiles
+rm -f apps/backend/*/code/package-lock.json
+rm -f apps/frontend/*/package-lock.json
+rm -f packages/*/*/package-lock.json
 ```
 
 ### Making Changes in a Submodule

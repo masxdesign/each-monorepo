@@ -1,9 +1,15 @@
 # Dependencies
 node_modules/
-package-lock.json
+
+# Lockfiles for other package managers (we use npm)
 yarn.lock
 pnpm-lock.yaml
 bun.lockb
+
+# Note: Root package-lock.json IS committed (important for reproducible builds)
+# But workspace-level lockfiles should NOT exist (npm workspaces use root lockfile only)
+apps/**/package-lock.json
+packages/**/package-lock.json
 
 # Environment files
 .env
