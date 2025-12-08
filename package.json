@@ -2,6 +2,10 @@
   "name": "each-workspace",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "clean": "rm -rf node_modules package-lock.json apps/backend/*/code/node_modules apps/backend/*/code/package-lock.json apps/frontend/*/node_modules apps/frontend/*/package-lock.json packages/*/*/node_modules packages/*/*/package-lock.json",
+    "reinstall": "npm run clean && npm install"
+  },
   "workspaces": [
     "apps/backend/*/code",
     "apps/frontend/*",
