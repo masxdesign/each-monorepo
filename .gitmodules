@@ -13,3 +13,6 @@
 [submodule "apps/frontend/4prop-crm-react"]
 	path = apps/frontend/4prop-crm-react
 	url = https://github.com/masxdesign/react-4prop-crm.git
+[submodule "apps/frontend/bizchat"]
+	path = apps/frontend/bizchat
+	url = https://github.com/masxdesign/react-bizchat-vite.git
