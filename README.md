@@ -11,6 +11,7 @@ EACH/
 │   │   ├── bizchat/           # BizChat backend API
 │   │   └── property-pub/      # Property Publishing backend API
 │   ├── frontend/
+│   │   ├── bizchat/           # BizChat React frontend (migrated from CRA)
 │   │   ├── property-pub-react/ # Property Publishing React frontend
 │   │   └── 4prop-crm-react/    # 4prop CRM React frontend
 │   └── swa/
@@ -41,9 +42,10 @@ npm install
 
 ```bash
 # Run specific workspace
-npm run dev --workspace=bizchat
-npm run dev --workspace=property-pub
-npm run dev --workspace=property-pub-react
+npm run dev --workspace=bizchat              # Backend
+npm run dev --workspace=property-pub         # Backend
+npm run dev --workspace=property-pub-react   # Frontend
+npm run dev --workspace=react-bizchat        # Frontend (bizchat)
 
 # Run all workspaces (if they have a dev script)
 npm run dev --workspaces
@@ -68,6 +70,12 @@ npm ls --workspaces --depth=0
   - Port: 8080
 
 ### Frontend Apps
+
+- **bizchat** - BizChat messaging React frontend
+  - Repo: https://github.com/masxdesign/react-bizchat.git
+  - Port: 5175 (HTTPS)
+  - Stack: Vite 5, React 18, Redux/Saga, Bootstrap 4, react-bootstrap v2
+  - Note: Migrated from Create React App (feature/migration branch)
 
 - **property-pub-react** - Property publishing React frontend
   - Repo: git@github.com:masxdesign/react-4prop-agentb.git
@@ -183,6 +191,20 @@ services:
       - /workspace/node_modules
     environment:
       - NODE_ENV=development
+
+  bizchat-frontend:
+    image: node:22-alpine
+    working_dir: /workspace
+    command: npm run dev --workspace=react-bizchat
+    ports:
+      - "5175:5175"
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - apps/frontend/bizchat/.env
 ```
 
 **Usage:**
@@ -258,6 +280,39 @@ WORKDIR /app/apps/backend/property-pub/code
 EXPOSE 8080
 
 CMD ["npm", "run", "start"]
+```
+
+#### Bizchat Frontend Dockerfile
+
+Create `apps/frontend/bizchat/Dockerfile`:
+
+```dockerfile
+# Build stage
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Copy workspace files
+COPY package*.json ./
+COPY apps/frontend/bizchat/package*.json ./apps/frontend/bizchat/
+
+# Install dependencies
+RUN npm ci
+
+# Copy source
+COPY apps/frontend/bizchat ./apps/frontend/bizchat
+
+# Build the app
+WORKDIR /app/apps/frontend/bizchat
+RUN npm run build
+
+# Production stage
+FROM nginx:alpine
+COPY --from=builder /app/apps/frontend/bizchat/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
 ```
 
 #### Property-Pub-React Dockerfile
@@ -374,6 +429,12 @@ docker build -t property-pub-react:latest -f apps/frontend/property-pub-react/Do
 
 # Run property-pub-react
 docker run -p 80:80 property-pub-react:latest
+
+# Build bizchat-frontend
+docker build -t bizchat-frontend:latest -f apps/frontend/bizchat/Dockerfile .
+
+# Run bizchat-frontend
+docker run -p 80:80 bizchat-frontend:latest
 ```
 
 ## 📝 Adding New Workspaces
