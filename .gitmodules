@@ -16,3 +16,6 @@
 [submodule "apps/frontend/bizchat"]
 	path = apps/frontend/bizchat
 	url = https://github.com/masxdesign/react-bizchat-vite.git
+[submodule "packages/backend-shared/mailer"]
+	path = packages/backend-shared/mailer
+	url = https://github.com/masxdesign/4prop-mailer.git
