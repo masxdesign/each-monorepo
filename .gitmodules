@@ -19,3 +19,6 @@
 [submodule "packages/backend-shared/mailer"]
 	path = packages/backend-shared/mailer
 	url = https://github.com/masxdesign/4prop-mailer.git
+[submodule "packages/backend-shared/db-utils"]
+	path = packages/backend-shared/db-utils
+	url = https://github.com/masxdesign/4prop-db-utils.git
