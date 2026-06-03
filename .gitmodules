@@ -22,3 +22,6 @@
 [submodule "packages/backend-shared/db-utils"]
 	path = packages/backend-shared/db-utils
 	url = https://github.com/masxdesign/4prop-db-utils.git
+[submodule "packages/frontend-shared/cursor-info-card"]
+	path = packages/frontend-shared/cursor-info-card
+	url = https://github.com/masxdesign/4prop-cursor-info-card.git

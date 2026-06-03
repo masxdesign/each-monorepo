@@ -17,8 +17,12 @@ EACH/
 │   └── swa/
 │       └── shopproperty-swa/   # Shop Property Static Web App
 └── packages/
-    └── backend-shared/
-        └── oauth/              # Shared OAuth authentication plugin
+    ├── backend-shared/
+    │   ├── oauth/              # Shared OAuth authentication plugin
+    │   ├── mailer/
+    │   └── db-utils/
+    └── frontend-shared/
+        └── cursor-info-card/   # Shared cursor-following tooltip (@4prop/cursor-info-card) — see package README for required Tailwind @source setup
 ```
 
 ## 🚀 Getting Started
