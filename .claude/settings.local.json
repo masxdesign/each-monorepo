@@ -17,7 +17,11 @@
       "Bash(git init:*)",
       "Bash(git remote add:*)",
       "Bash(git push:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(gh repo *)",
+      "Bash(git -c commit.gpgsign=false commit -q -m 'Initial commit: @4prop/brand-theme shared advertiser brand surface *)",
+      "Bash(git config *)",
+      "Bash(git submodule *)"
     ],
     "deny": [],
     "ask": []
