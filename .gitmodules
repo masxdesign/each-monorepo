@@ -31,3 +31,9 @@
 [submodule "packages/frontend-shared/brand-theme"]
 	path = packages/frontend-shared/brand-theme
 	url = https://github.com/masxdesign/4prop-brand-theme.git
+[submodule "packages/frontend-shared/requirement-enhance"]
+	path = packages/frontend-shared/requirement-enhance
+	url = https://github.com/masxdesign/4prop-requirement-enhance.git
+[submodule "packages/frontend-shared/seo-enhance"]
+	path = packages/frontend-shared/seo-enhance
+	url = https://github.com/masxdesign/4prop-seo-enhance.git

@@ -21,7 +21,15 @@
       "Bash(gh repo *)",
       "Bash(git -c commit.gpgsign=false commit -q -m 'Initial commit: @4prop/brand-theme shared advertiser brand surface *)",
       "Bash(git config *)",
-      "Bash(git submodule *)"
+      "Bash(git submodule *)",
+      "Bash(cd /tmp && gh repo view masxdesign/4prop-requirement-enhance --json name,url 2>&1 | head -5; echo \"---\"; gh repo view masxdesign/4prop-seo-enhance --json name,url 2>&1 | head -5)",
+      "Read(//private/tmp/**)",
+      "Bash(gh api *)",
+      "Bash(mv packages/frontend-shared/requirement-enhance /tmp/claude-501/-Users-salgadom-EACH-each-monorepo/77e0d03a-9117-4b6d-b601-3231dc53585e/scratchpad/requirement-enhance)",
+      "Bash(mv packages/frontend-shared/seo-enhance /tmp/claude-501/-Users-salgadom-EACH-each-monorepo/77e0d03a-9117-4b6d-b601-3231dc53585e/scratchpad/seo-enhance)",
+      "Bash(git -C packages/frontend-shared/property-enhance show HEAD:.gitignore)",
+      "Bash(node -e \"import\\('@4prop/requirement-enhance'\\).then\\(\\(\\)=>console.log\\('requirement-enhance OK'\\)\\).catch\\(e=>console.log\\('FAIL',e.message\\)\\)\")",
+      "Bash(node -e \"import\\('@4prop/seo-enhance'\\).then\\(\\(\\)=>console.log\\('seo-enhance OK'\\)\\).catch\\(e=>console.log\\('FAIL',e.message\\)\\)\")"
     ],
     "deny": [],
     "ask": []
