@@ -1,0 +1,25 @@
+{
+  "name": "@4prop/listing",
+  "version": "1.0.0",
+  "description": "Shared property-listing query builders (SQL construction only, no DB driver)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./filters": "./src/agentb-filters.js",
+    "./queries": "./src/agentb-queries.js",
+    "./requirements-queries": "./src/agentb-requirements-queries.js",
+    "./site-mode-scope": "./src/siteModePropertyScope.js",
+    "./sitemap": "./src/sitemap.js"
+  },
+  "dependencies": {
+    "@4prop/seo-enhance": "*",
+    "express-validator": "^7.2.1"
+  },
+  "peerDependencies": {
+    "mssql": "^11.0.0 || ^12.0.0"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ]
+}
