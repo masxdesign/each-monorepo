@@ -37,3 +37,6 @@
 [submodule "packages/frontend-shared/seo-enhance"]
 	path = packages/frontend-shared/seo-enhance
 	url = https://github.com/masxdesign/4prop-seo-enhance.git
+[submodule "packages/backend-shared/stripe"]
+	path = packages/backend-shared/stripe
+	url = https://github.com/masxdesign/4prop-stripe.git
