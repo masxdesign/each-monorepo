@@ -1,0 +1,25 @@
+# Build-context exclusions for EVERY image built from the monorepo context
+# (property-pub, bizchat, and the `monorepo` additional_context of 4prop-web).
+#
+# SCOPE THIS NARROWLY. One file governs several images, so anything excluded here
+# is invisible to all of them — an over-broad rule fails at build time in an image
+# you were not thinking about.
+
+# ── property-pub: the UK postcodemap GeoJSON ────────────────────────────────
+# ~12MB of static polygons, PUBLISHED TO THE SHARED UPLOADS VOLUME instead of baked
+# in (`npm run deploy:postcodemap`). Excluded because it shared a Docker layer with
+# the application code, which changes on every deploy — so 12MB of unchanged
+# geometry was rebuilt and re-pushed to the registry each time.
+#
+# Read at runtime via getPostcodemapDir() → UPLOADS_PATH; nothing imports it at
+# build time. PUBLISH BEFORE DEPLOYING an image without it: the static route is
+# `fallthrough: false`, so a missing directory 404s rather than serving HTML.
+apps/backend/property-pub/code/src/data/postcodemap
+
+# ── never useful in any image ───────────────────────────────────────────────
+# node_modules is reinstalled inside the image (`npm install` against the copied
+# package.json files), so shipping the host's 876MB copy would be both slow and
+# wrong — it carries the host platform's native binaries (sharp's darwin build
+# instead of the linuxmusl one).
+**/node_modules
+**/.git
