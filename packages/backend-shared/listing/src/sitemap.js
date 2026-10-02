@@ -263,9 +263,17 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
 
   // ── Subtype pages: /<subtype>, /<subtype>-for-(sale|rent) — national only ──
   //
-  // The slug is labelToSlug(subtype label), SINGULAR: that is the canonical form
-  // (verified live — all 125 are self-canonical on 4prop and advertiser hosts). The
-  // plural of a subtype 301s to it on 4prop, so it must never be emitted.
+  // The slug is createSlug(subtype label) — the port of PHP's create_slug, i.e.
+  // 4prop's canonical scheme — and SINGULAR: the plural of a subtype 301s to it on
+  // 4prop, so it must never be emitted.
+  //
+  // For 26 punctuated labels ("Bars/Pubs", "Amenity Land & Lakes") createSlug and
+  // the SPA's labelToSlug disagree (`bars-pubs` vs `barspubs`). Measured live:
+  //   - `-for-(rent|sale)` with the createSlug form: 200 + self-canonical on BOTH
+  //     www.4prop.com and advertiser hosts;
+  //   - the BARE form: 4prop's PHP resolves only createSlug (`/barspubs` 404s),
+  //     property-pub only labelToSlug (`/bars-pubs` is a generic, canonical-less
+  //     shell). So the bare URL is emitted only when the two schemes agree.
   //
   // Gated at MIN_SUBTYPE_PROPERTIES per tenure, and NOT crossed with locations:
   // 128 subtypes × tenures × towns would be tens of thousands of thin pages.
@@ -278,6 +286,7 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
     const typeSlugs = new Set();
     for (const type of propertyTypes) {
       if (!type?.label) continue;
+      typeSlugs.add(createSlug(type.label));
       typeSlugs.add(labelToSlug(type.label));
       typeSlugs.add(labelToSlug(pluralizeLabel(type.label)));
     }
@@ -285,12 +294,13 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
     for (const type of propertyTypes) {
       if (!slugByTypeId.has(Number(type?.id))) continue; // advertiser's own types only
       for (const subtype of Array.isArray(type.subtypes) ? type.subtypes : []) {
-        const slug = subtype?.label ? labelToSlug(subtype.label) : '';
+        const slug = subtype?.label ? createSlug(String(subtype.label)) : '';
         if (!slug || typeSlugs.has(slug)) continue;
         const counts = subtypeCounts[String(subtype.id)];
         if (!counts) continue;
 
-        if (Number(counts.any) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}`);
+        const bareResolvesEverywhere = slug === labelToSlug(subtype.label);
+        if (bareResolvesEverywhere && Number(counts.any) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}`);
         for (const tenure of ['rent', 'sale']) {
           if (!(Number(summary.propertyCount?.[tenure]) > 0)) continue;
           if (Number(counts[tenure]) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}${TENURE_SUFFIX[tenure]}`);

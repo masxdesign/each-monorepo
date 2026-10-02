@@ -34,6 +34,7 @@ const catalog = [{
   subtypes: [
     { id: 61, label: 'Serviced Office', parentId: OFFICE },
     { id: 62, label: 'Office', parentId: OFFICE }, // same slug as the type
+    { id: 63, label: 'Bars/Pubs', parentId: OFFICE }, // createSlug ≠ labelToSlug
   ],
 }];
 
@@ -87,6 +88,15 @@ describe('buildAdvertiserUrls town gating', () => {
     assert.ok(!got.has('/serviced-office-for-sale'), 'below threshold for sale');
     assert.ok(![...got].some((p) => p.startsWith('/serviced-offices')), 'never the plural');
     assert.ok(![...got].some((p) => /^\/serviced-office.*\/./.test(p)), 'never crossed with a location');
+  });
+
+  test('punctuated subtype: createSlug form, tenure pages only (no bare page)', async () => {
+    const n = MIN_SUBTYPE_PROPERTIES;
+    const got = await paths({ subtypes: { 63: { any: n, rent: n, sale: n } } });
+    assert.ok(got.has('/bars-pubs-for-rent'));
+    assert.ok(got.has('/bars-pubs-for-sale'));
+    assert.ok(!got.has('/bars-pubs'), 'bare form resolves on 4prop but not on advertiser hosts');
+    assert.ok(![...got].some((p) => p.startsWith('/barspubs')), 'never the labelToSlug form');
   });
 
   test('a subtype whose slug is a type slug adds nothing new', async () => {
