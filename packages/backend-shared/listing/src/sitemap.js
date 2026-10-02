@@ -268,12 +268,9 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
   // 4prop, so it must never be emitted.
   //
   // For 26 punctuated labels ("Bars/Pubs", "Amenity Land & Lakes") createSlug and
-  // the SPA's labelToSlug disagree (`bars-pubs` vs `barspubs`). Measured live:
-  //   - `-for-(rent|sale)` with the createSlug form: 200 + self-canonical on BOTH
-  //     www.4prop.com and advertiser hosts;
-  //   - the BARE form: 4prop's PHP resolves only createSlug (`/barspubs` 404s),
-  //     property-pub only labelToSlug (`/bars-pubs` is a generic, canonical-less
-  //     shell). So the bare URL is emitted only when the two schemes agree.
+  // the SPA's labelToSlug disagree (`bars-pubs` vs `barspubs`). createSlug is the
+  // one both hosts serve: 4prop 301s the labelToSlug form to it, and property-pub's
+  // route gate registers it (listingRouteGate.js buildSlugMap).
   //
   // Gated at MIN_SUBTYPE_PROPERTIES per tenure, and NOT crossed with locations:
   // 128 subtypes × tenures × towns would be tens of thousands of thin pages.
@@ -299,8 +296,7 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
         const counts = subtypeCounts[String(subtype.id)];
         if (!counts) continue;
 
-        const bareResolvesEverywhere = slug === labelToSlug(subtype.label);
-        if (bareResolvesEverywhere && Number(counts.any) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}`);
+        if (Number(counts.any) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}`);
         for (const tenure of ['rent', 'sale']) {
           if (!(Number(summary.propertyCount?.[tenure]) > 0)) continue;
           if (Number(counts[tenure]) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}${TENURE_SUFFIX[tenure]}`);

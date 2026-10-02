@@ -90,12 +90,12 @@ describe('buildAdvertiserUrls town gating', () => {
     assert.ok(![...got].some((p) => /^\/serviced-office.*\/./.test(p)), 'never crossed with a location');
   });
 
-  test('punctuated subtype: createSlug form, tenure pages only (no bare page)', async () => {
+  test('punctuated subtype: always the createSlug form, bare and tenure', async () => {
     const n = MIN_SUBTYPE_PROPERTIES;
     const got = await paths({ subtypes: { 63: { any: n, rent: n, sale: n } } });
+    assert.ok(got.has('/bars-pubs'));
     assert.ok(got.has('/bars-pubs-for-rent'));
     assert.ok(got.has('/bars-pubs-for-sale'));
-    assert.ok(!got.has('/bars-pubs'), 'bare form resolves on 4prop but not on advertiser hosts');
     assert.ok(![...got].some((p) => p.startsWith('/barspubs')), 'never the labelToSlug form');
   });
 
