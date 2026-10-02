@@ -40,3 +40,6 @@
 [submodule "packages/backend-shared/stripe"]
 	path = packages/backend-shared/stripe
 	url = https://github.com/masxdesign/4prop-stripe.git
+[submodule "packages/backend-shared/listing"]
+	path = packages/backend-shared/listing
+	url = https://github.com/masxdesign/4prop-listing.git
