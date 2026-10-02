@@ -8,6 +8,7 @@ import {
   buildAdvertiserUrls, MIN_TOWN_PROPERTIES,
   parseCompanyCounts, buildKnownCompaniesQuery, buildCompanyUrls, buildIndexChildren,
   loadScopedCompanyIds, COMPANY_LOOKUP_CHUNK,
+  MIN_SUBTYPE_PROPERTIES, parseSubtypeCounts,
 } from './sitemap.js';
 
 const ORIGIN = 'https://www.example.com';
@@ -27,13 +28,23 @@ const tenureManifest = {
 /** One town per tenure bucket, keyed by tenure → { typeId: n }. */
 const town = (n) => ({ any: { [OFFICE]: n }, rent: { [OFFICE]: n }, sale: {} });
 
-async function paths({ curated = [], towns = null, variants } = {}) {
+const catalog = [{
+  id: OFFICE,
+  label: 'Office',
+  subtypes: [
+    { id: 61, label: 'Serviced Office', parentId: OFFICE },
+    { id: 62, label: 'Office', parentId: OFFICE }, // same slug as the type
+  ],
+}];
+
+async function paths({ curated = [], towns = null, variants, subtypes } = {}) {
   const urls = await buildAdvertiserUrls({ site_mode: '4prop_site' }, null, ORIGIN, {
     readManifest: async (name) => (name.endsWith('.json') && name.startsWith('x_') ? tenureManifest : summary),
-    getPropertyTypesCatalog: async () => [{ id: OFFICE, label: 'Office' }],
+    getPropertyTypesCatalog: async () => catalog,
     readPopularLocationSlugs: async () => curated,
     readTownCounts: async () => (towns ? { towns } : null),
     readVariantCounts: variants ? async () => variants : undefined,
+    readSubtypeCounts: subtypes ? async () => subtypes : undefined,
   });
   return new Set(urls.map(({ loc }) => loc.slice(ORIGIN.length)));
 }
@@ -66,6 +77,31 @@ describe('buildAdvertiserUrls town gating', () => {
     assert.ok((await paths({ variants: { 'businesses-for-sale': 3 } })).has('/businesses-for-sale'));
     assert.ok(!(await paths({ variants: { 'businesses-for-sale': 0 } })).has('/businesses-for-sale'));
     assert.ok(!(await paths()).has('/businesses-for-sale'));
+  });
+
+  test('subtype pages: singular slug, national only, gated per tenure', async () => {
+    const n = MIN_SUBTYPE_PROPERTIES;
+    const got = await paths({ subtypes: { 61: { any: n, rent: n, sale: n - 1 }, 62: { any: 99, rent: 99, sale: 99 } } });
+    assert.ok(got.has('/serviced-office'));
+    assert.ok(got.has('/serviced-office-for-rent'));
+    assert.ok(!got.has('/serviced-office-for-sale'), 'below threshold for sale');
+    assert.ok(![...got].some((p) => p.startsWith('/serviced-offices')), 'never the plural');
+    assert.ok(![...got].some((p) => /^\/serviced-office.*\/./.test(p)), 'never crossed with a location');
+  });
+
+  test('a subtype whose slug is a type slug adds nothing new', async () => {
+    const without = await paths();
+    const withSub = await paths({ subtypes: { 62: { any: 99, rent: 99, sale: 99 } } });
+    assert.deepEqual([...withSub].sort(), [...without].sort());
+  });
+
+  test('listing URLs carry no lastmod', async () => {
+    const urls = await buildAdvertiserUrls({ site_mode: '4prop_site' }, null, ORIGIN, {
+      readManifest: async (name) => (name.startsWith('x_') ? tenureManifest : summary),
+      getPropertyTypesCatalog: async () => catalog,
+    });
+    assert.ok(urls.length > 0);
+    assert.ok(urls.every((u) => u.lastmod === null));
   });
 
   test('no counts file → no extra towns', async () => {
@@ -132,5 +168,20 @@ describe('company sitemap helpers', () => {
     assert.ok(got.every((cid) => Number(cid) % 2 === 0));
     assert.equal(queries.length, 3, 'one scope query + two lookup chunks');
     assert.equal(queries[0].inputs.advertiser_id, 42);
+  });
+});
+
+describe('parseSubtypeCounts', () => {
+  test('splits pstids and buckets by tenure bitmask', () => {
+    const got = parseSubtypeCounts([
+      { pstids: ',61,70,', tenure: 1, n: 4 },  // rent
+      { pstids: ',61,', tenure: 4, n: 2 },     // sale
+      { pstids: ',61,', tenure: 5, n: 1 },     // both
+      { pstids: ',x,,', tenure: 1, n: 9 },
+    ]);
+    assert.deepEqual(got, {
+      61: { any: 7, rent: 5, sale: 3 },
+      70: { any: 4, rent: 4, sale: 0 },
+    });
   });
 });

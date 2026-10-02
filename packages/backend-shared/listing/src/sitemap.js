@@ -27,7 +27,7 @@
 import { createSlug } from '@4prop/seo-enhance/seoCreateSlug';
 import { resolveSummaryFilename } from '@4prop/seo-enhance/locations/manifest';
 import { resolveTypes } from '@4prop/seo-enhance/locations/types';
-import { getListingVariantSlugForPropertyType } from '@4prop/seo-enhance/navTarget';
+import { getListingVariantSlugForPropertyType, labelToSlug, pluralizeLabel } from '@4prop/seo-enhance/navTarget';
 import { buildVariantFilter } from './agentb-filters.js';
 
 /** Tenure key in the manifest → the URL suffix the route gate accepts. */
@@ -69,6 +69,52 @@ export const DETAIL_URL_CAP = 1000000;
  * one-to-four-property pages a crawler is least likely to index.
  */
 export const MIN_TOWN_PROPERTIES = 5;
+
+/** Minimum properties (per tenure) for a subtype page to be listed. Same bar as towns. */
+export const MIN_SUBTYPE_PROPERTIES = 5;
+
+/**
+ * In-scope property counts per subtype id and tenure:
+ * `{ '61': { any: 40, rent: 31, sale: 9 } }`.
+ *
+ * `p.pstids` is a `,a,b,` CSV of subtype ids, split in JS for the same reason as
+ * company cids (no STRING_SPLIT; CHARINDEX joins cannot use an index). A property
+ * with two subtypes counts once for each, which is what each subtype page shows.
+ */
+export async function loadScopedSubtypeCounts(pool, scope, advertiserId) {
+  const request = pool.request();
+  if (advertiserId != null) request.input('advertiser_id', advertiserId);
+  const { recordset } = await request.query(`
+    WITH ActiveProps AS (${scope.buildActivePropertiesPidCtidCte()})
+    SELECT p.pstids AS pstids, p.tenure AS tenure, COUNT(DISTINCT p.pid) AS n
+    FROM a_rpPropertyNewAll_p22 p
+    INNER JOIN ActiveProps ap ON ap.pid = p.pid
+    WHERE p.status NOT IN (2, 7) AND p.pstids IS NOT NULL AND p.pstids <> ''
+    GROUP BY p.pstids, p.tenure
+  `);
+  return parseSubtypeCounts(recordset);
+}
+
+/** Rows of `{ pstids, tenure, n }` → `{ subtypeId: { any, rent, sale } }`. */
+export function parseSubtypeCounts(rows) {
+  const counts = {};
+  for (const row of rows ?? []) {
+    const n = Number(row.n) || 0;
+    if (!n) continue;
+    const tenure = Number(row.tenure) || 0;
+    const rent = (tenure & 3) > 0;
+    const sale = (tenure & 12) > 0;
+    for (const token of new Set(String(row.pstids ?? '').split(','))) {
+      const id = token.trim();
+      if (!/^\d+$/.test(id)) continue;
+      const c = (counts[id] ??= { any: 0, rent: 0, sale: 0 });
+      c.any += n;
+      if (rent) c.rent += n;
+      if (sale) c.sale += n;
+    }
+  }
+  return counts;
+}
 
 /**
  * Listing variants that are SEO routes in their own right — the route gate
@@ -148,6 +194,9 @@ export function xmlEscape(value) {
  *        bizchat's town-counts generator. Omitted or null → town URLs are NOT
  *        gated, i.e. today's behaviour, so a missing file degrades to the status
  *        quo rather than removing every town URL.
+ * @param {() => Promise<Record<string, {any:number, rent:number, sale:number}>>} [deps.readSubtypeCounts]
+ *        In-scope property count per subtype id and tenure (loadScopedSubtypeCounts).
+ *        Omitted → no subtype URLs.
  * @param {() => Promise<Record<string, number>>} [deps.readVariantCounts]
  *        In-scope property count per SITEMAP_VARIANTS entry (loadScopedVariantCounts).
  *        Omitted → no variant URLs.
@@ -155,7 +204,7 @@ export function xmlEscape(value) {
 export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps) {
   const {
     readManifest, getPropertyTypesCatalog, readPopularLocationSlugs, readTownCounts,
-    readVariantCounts,
+    readVariantCounts, readSubtypeCounts,
   } = deps;
   const siteMode = advertiser?.site_mode ?? 'advertiser_site';
 
@@ -167,16 +216,18 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
   }
   if (!summary) return [];
 
-  const lastmod = typeof summary.generatedAt === 'string'
-    ? summary.generatedAt.slice(0, 10)
-    : null;
+  // No per-URL lastmod. The only date to hand was the manifest's generatedAt — i.e.
+  // "tonight", stamped on every URL every night. A lastmod that always says "changed
+  // today" is exactly what teaches a crawler to ignore the field site-wide.
+  const lastmod = null;
 
   // typeId → URL slug, for the advertiser's own type set only.
   const typeIds = Array.isArray(summary.typeIds) ? summary.typeIds : [];
   const slugByTypeId = new Map();
+  let propertyTypes = [];
   if (typeIds.length) {
     try {
-      const propertyTypes = await getPropertyTypesCatalog();
+      propertyTypes = await getPropertyTypesCatalog();
       for (const type of resolveTypes({ typeIds, propertyTypes })) {
         const slug = getListingVariantSlugForPropertyType(type);
         if (slug) slugByTypeId.set(type.id, slug);
@@ -209,6 +260,44 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
 
   add('/');
   for (const slug of slugByTypeId.values()) add(`/${slug}`);
+
+  // ── Subtype pages: /<subtype>, /<subtype>-for-(sale|rent) — national only ──
+  //
+  // The slug is labelToSlug(subtype label), SINGULAR: that is the canonical form
+  // (verified live — all 125 are self-canonical on 4prop and advertiser hosts). The
+  // plural of a subtype 301s to it on 4prop, so it must never be emitted.
+  //
+  // Gated at MIN_SUBTYPE_PROPERTIES per tenure, and NOT crossed with locations:
+  // 128 subtypes × tenures × towns would be tens of thousands of thin pages.
+  // Subtypes whose slug is also a TYPE slug (Hotel, Office, Unspecified) are
+  // skipped — that URL is the type's page, already listed above.
+  if (readSubtypeCounts && slugByTypeId.size) {
+    let subtypeCounts = {};
+    try { subtypeCounts = (await readSubtypeCounts()) ?? {}; } catch { subtypeCounts = {}; }
+
+    const typeSlugs = new Set();
+    for (const type of propertyTypes) {
+      if (!type?.label) continue;
+      typeSlugs.add(labelToSlug(type.label));
+      typeSlugs.add(labelToSlug(pluralizeLabel(type.label)));
+    }
+
+    for (const type of propertyTypes) {
+      if (!slugByTypeId.has(Number(type?.id))) continue; // advertiser's own types only
+      for (const subtype of Array.isArray(type.subtypes) ? type.subtypes : []) {
+        const slug = subtype?.label ? labelToSlug(subtype.label) : '';
+        if (!slug || typeSlugs.has(slug)) continue;
+        const counts = subtypeCounts[String(subtype.id)];
+        if (!counts) continue;
+
+        if (Number(counts.any) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}`);
+        for (const tenure of ['rent', 'sale']) {
+          if (!(Number(summary.propertyCount?.[tenure]) > 0)) continue;
+          if (Number(counts[tenure]) >= MIN_SUBTYPE_PROPERTIES) add(`/${slug}${TENURE_SUFFIX[tenure]}`);
+        }
+      }
+    }
+  }
 
   // First-class listing variants (/businesses-for-sale), only when non-empty.
   if (readVariantCounts) {
@@ -379,8 +468,9 @@ ${body}
  * outgrows one file, and it costs one extra round trip.
  *
  * `lastmod` on a child is optional but useful: it lets a crawler skip a shard it
- * has already seen unchanged. We only set it where we have an honest value (the
- * manifest's generatedAt, for the listings child) — never invented.
+ * has already seen unchanged — but only when honest. Every child is regenerated
+ * nightly whether or not its content changed, so the generation date is not one,
+ * and today no child carries it.
  */
 export function renderSitemapIndexXml(children) {
   const body = children.map(({ loc, lastmod }) => (
