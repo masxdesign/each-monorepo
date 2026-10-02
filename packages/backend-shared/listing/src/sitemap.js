@@ -28,6 +28,7 @@ import { createSlug } from '@4prop/seo-enhance/seoCreateSlug';
 import { resolveSummaryFilename } from '@4prop/seo-enhance/locations/manifest';
 import { resolveTypes } from '@4prop/seo-enhance/locations/types';
 import { getListingVariantSlugForPropertyType } from '@4prop/seo-enhance/navTarget';
+import { buildVariantFilter } from './agentb-filters.js';
 
 /** Tenure key in the manifest → the URL suffix the route gate accepts. */
 export const TENURE_SUFFIX = { rent: '-for-rent', sale: '-for-sale' };
@@ -59,6 +60,49 @@ export const DETAIL_SHARD_SIZE = 25000;
  * never be reached silently.
  */
 export const DETAIL_URL_CAP = 1000000;
+
+/**
+ * Minimum properties for a NON-curated town URL to be listed (curated towns need 1).
+ *
+ * Sized against dev data for 4prop_site: ≥1 → 676 towns / ~11k URLs, ≥5 → 522
+ * towns / ~4.6k URLs. Five keeps three quarters of the towns while dropping the
+ * one-to-four-property pages a crawler is least likely to index.
+ */
+export const MIN_TOWN_PROPERTIES = 5;
+
+/**
+ * Listing variants that are SEO routes in their own right — the route gate
+ * (listingRouteGate.js) gives them a server-rendered head. `/auctions` and
+ * `/pop-up-shops` are app-only views with no SSR head, so they stay out.
+ */
+export const SITEMAP_VARIANTS = ['businesses-for-sale'];
+
+/**
+ * In-scope property count per SITEMAP_VARIANTS entry, e.g. `{ 'businesses-for-sale': 41 }`.
+ *
+ * The predicate is agentb's own buildVariantFilter — the one the listing page runs
+ * — so the sitemap lists a variant exactly when the page would show something.
+ * Pool injected, as for loadScopedCompanyIds.
+ */
+export async function loadScopedVariantCounts(pool, scope, advertiserId) {
+  const counts = {};
+  const cte = scope.buildActivePropertiesPidCtidCte();
+  for (const variant of SITEMAP_VARIANTS) {
+    const { sql } = buildVariantFilter(variant);
+    if (!sql) continue;
+    const request = pool.request();
+    if (advertiserId != null) request.input('advertiser_id', advertiserId);
+    const { recordset } = await request.query(`
+      WITH ActiveProps AS (${cte})
+      SELECT COUNT(DISTINCT p.pid) AS n
+      FROM a_rpPropertyNewAll_p22 p
+      INNER JOIN ActiveProps ap ON ap.pid = p.pid
+      WHERE p.status NOT IN (2, 7) AND ${sql}
+    `);
+    counts[variant] = Number(recordset?.[0]?.n) || 0;
+  }
+  return counts;
+}
 
 /** XML-escape. Only the five predefined entities are legal in XML. */
 export function xmlEscape(value) {
@@ -104,10 +148,14 @@ export function xmlEscape(value) {
  *        bizchat's town-counts generator. Omitted or null → town URLs are NOT
  *        gated, i.e. today's behaviour, so a missing file degrades to the status
  *        quo rather than removing every town URL.
+ * @param {() => Promise<Record<string, number>>} [deps.readVariantCounts]
+ *        In-scope property count per SITEMAP_VARIANTS entry (loadScopedVariantCounts).
+ *        Omitted → no variant URLs.
  */
 export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps) {
   const {
     readManifest, getPropertyTypesCatalog, readPopularLocationSlugs, readTownCounts,
+    readVariantCounts,
   } = deps;
   const siteMode = advertiser?.site_mode ?? 'advertiser_site';
 
@@ -161,6 +209,15 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
 
   add('/');
   for (const slug of slugByTypeId.values()) add(`/${slug}`);
+
+  // First-class listing variants (/businesses-for-sale), only when non-empty.
+  if (readVariantCounts) {
+    let variantCounts = {};
+    try { variantCounts = (await readVariantCounts()) ?? {}; } catch { variantCounts = {}; }
+    for (const variant of SITEMAP_VARIANTS) {
+      if (Number(variantCounts[variant]) > 0) add(`/${variant}`);
+    }
+  }
 
   for (const tenure of ['rent', 'sale']) {
     // propertyCount gates the whole tenure: an advertiser with 0 sale properties
@@ -248,6 +305,43 @@ export async function buildAdvertiserUrls(advertiser, advertiserId, origin, deps
     }
   }
 
+  // ── Town URLs beyond the curated list: every counted town with real stock ──
+  //
+  // The town-counts file covers EVERY town in 4prop's master locations.json (not
+  // just the curated 60), so non-curated towns are taken from its keys. They get a
+  // stricter gate than the curated ones: a page must have at least
+  // MIN_TOWN_PROPERTIES properties. Listing every town with ≥1 property is what
+  // PHP's sitemap did — ~11k mostly one-or-two-property pages on www.4prop.com,
+  // which Search Console then filed under "Crawled/Discovered – currently not
+  // indexed". The curated towns keep the `> 0` rule above, so no URL they
+  // already advertise disappears.
+  //
+  // No counts file → no extra towns: there is nothing to enumerate or gate on.
+  const curatedSlugs = new Set(townSlugs);
+  const townCount = (locSlug, tenure, typeId) => Number(townsIndex?.[locSlug]?.[tenure]?.[String(typeId)]) || 0;
+
+  for (const locSlug of Object.keys(townsIndex ?? {})) {
+    // Curated slugs were handled above; county slugs already came from the manifests.
+    if (curatedSlugs.has(locSlug) || countyTypeCounts.has(locSlug)) continue;
+
+    for (const [typeId, slug] of slugByTypeId) {
+      if (townCount(locSlug, 'any', typeId) >= MIN_TOWN_PROPERTIES) add(`/${slug}/${locSlug}`);
+    }
+    for (const tenure of ['rent', 'sale']) {
+      if (!(Number(summary.propertyCount?.[tenure]) > 0)) continue;
+      // The bare tenure page shows every type, so it is gated on the total. A
+      // property tagged with two types counts twice here — a small overstatement
+      // that only matters right at the threshold.
+      let total = 0;
+      for (const [typeId, slug] of slugByTypeId) {
+        const n = townCount(locSlug, tenure, typeId);
+        total += n;
+        if (n >= MIN_TOWN_PROPERTIES) add(`/${slug}${TENURE_SUFFIX[tenure]}/${locSlug}`);
+      }
+      if (total >= MIN_TOWN_PROPERTIES) add(`/for-${tenure}/${locSlug}`);
+    }
+  }
+
   return [...urls].map(([path, mod]) => ({ loc: `${origin}${path}`, lastmod: mod }));
 }
 
@@ -326,7 +420,7 @@ export function detailShardWindow(shard) {
  * advertiser with no live bookings gets an index with one child rather than a
  * broken link to an empty shard.
  */
-export function buildIndexChildren(origin, total, lastmod = null) {
+export function buildIndexChildren(origin, total, lastmod = null, { companies = 0 } = {}) {
   const shards = detailShardCount(total);
   const children = [{ loc: `${origin}/sitemap-listings.xml`, lastmod }];
   for (let n = 1; n <= shards; n += 1) {
@@ -334,5 +428,107 @@ export function buildIndexChildren(origin, total, lastmod = null) {
     // timestamp, and a wrong one teaches a crawler to ignore the field.
     children.push({ loc: `${origin}/sitemap-details-${n}.xml`, lastmod: null });
   }
+  // Only when there is something in it — same rule as the detail shards: an index
+  // never points at an empty (404ing) child.
+  if (companies > 0) children.push({ loc: `${origin}/sitemap-companies.xml`, lastmod: null });
   return { children, shards };
+}
+
+// ── Company catalogue URLs — /company/:cid ──────────────────────────────────
+//
+// A company is listed when it has ≥1 property in the advertiser's scope AND exists
+// in a_rcCompany (the table the company page takes its name/logo from). The second
+// check matters: /company/<any number> renders 200, so an unknown cid would be a
+// soft 404. No minimum-stock threshold (unlike towns): company-name searches are
+// navigational, so the page earns its place with a single listing.
+//
+// SQL only, per this package's contract — each service runs it on its own pool.
+
+/**
+ * Companies with stock in scope: one row per distinct `p.cids` list, with how many
+ * properties carry it. `p.cids` is a `,a,b,` CSV; it is split in JS
+ * (parseCompanyCounts) because this database has no STRING_SPLIT and a CHARINDEX
+ * match against a_rcCompany cannot use an index (it timed out in production).
+ *
+ * @param {string} cte  The scope's buildActivePropertiesPidCtidCte() output.
+ */
+export function buildScopedCompanyCountsQuery(cte) {
+  return `
+    WITH ActiveProps AS (${cte})
+    SELECT p.cids AS cids, COUNT(DISTINCT p.pid) AS n
+    FROM a_rpPropertyNewAll_p22 p
+    INNER JOIN ActiveProps ap ON ap.pid = p.pid
+    WHERE p.status NOT IN (2, 7) AND p.cids IS NOT NULL AND p.cids <> ''
+    GROUP BY p.cids
+  `;
+}
+
+/** `[{ cids: ',494,1365,', n: 3 }]` → Map<cid, propertyCount>. Non-numeric tokens dropped. */
+export function parseCompanyCounts(rows) {
+  const counts = new Map();
+  for (const row of rows ?? []) {
+    const n = Number(row.n) || 0;
+    for (const token of new Set(String(row.cids ?? '').split(','))) {
+      const cid = token.trim();
+      if (!/^\d+$/.test(cid) || cid === '0' || /^0+$/.test(cid)) continue;
+      counts.set(cid, (counts.get(cid) ?? 0) + n);
+    }
+  }
+  return counts;
+}
+
+/** IN-list size per known-companies query — under mssql's 2,100-parameter cap even if parameterised. */
+export const COMPANY_LOOKUP_CHUNK = 1000;
+
+/**
+ * `SELECT cid FROM a_rcCompany WHERE cid IN (…)` for one chunk of cids.
+ *
+ * The ids are INLINED: parseCompanyCounts only ever yields /^\d+$/ strings, and
+ * this function re-checks, so nothing but digits reaches the SQL. They are quoted
+ * because a_rcCompany.cid is VARCHAR — a numeric IN list would make SQL Server
+ * convert every row's cid to a number and fail on any non-numeric one.
+ */
+export function buildKnownCompaniesQuery(cids) {
+  const ids = cids.map(String).filter((cid) => /^\d+$/.test(cid));
+  if (!ids.length) return null;
+  return `SELECT DISTINCT LTRIM(RTRIM(c.cid)) AS cid FROM a_rcCompany c WHERE c.cid IN (${ids.map((id) => `'${id}'`).join(',')})`;
+}
+
+/**
+ * Company ids to list for one advertiser scope: has stock in scope AND is a real
+ * company. Both services call this — bizchat nightly, property-pub on its fallback
+ * path — so they cannot disagree about which companies exist.
+ *
+ * The pool is INJECTED (anything with `.request().input().query()`), so this
+ * package still imports no DB driver.
+ *
+ * @param {object} pool
+ * @param {{ buildActivePropertiesPidCtidCte: Function }} scope  resolveSiteModePropertyScope(siteMode)
+ * @param {number|null} advertiserId  Bound as @advertiser_id for the scheduled scopes.
+ * @returns {Promise<string[]>}
+ */
+export async function loadScopedCompanyIds(pool, scope, advertiserId) {
+  const request = pool.request();
+  if (advertiserId != null) request.input('advertiser_id', advertiserId);
+  const { recordset } = await request.query(
+    buildScopedCompanyCountsQuery(scope.buildActivePropertiesPidCtidCte()),
+  );
+  const withStock = [...parseCompanyCounts(recordset).keys()];
+
+  const known = [];
+  for (let i = 0; i < withStock.length; i += COMPANY_LOOKUP_CHUNK) {
+    const sql = buildKnownCompaniesQuery(withStock.slice(i, i + COMPANY_LOOKUP_CHUNK));
+    if (!sql) continue;
+    const result = await pool.request().query(sql);
+    for (const row of result.recordset ?? []) known.push(String(row.cid));
+  }
+  return [...new Set(known)];
+}
+
+/** `/company/:cid` rows, ascending by cid so the file is stable run to run. */
+export function buildCompanyUrls(cids, origin, { basePath = '' } = {}) {
+  return [...cids]
+    .map(String)
+    .sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0))
+    .map((cid) => ({ loc: `${origin}${basePath}/company/${cid}`, lastmod: null }));
 }
