@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/frontend/property-pub-react", "run", "dev"],
+      "port": 8183,
+      "url": "https://localhost:8183",
+      "autoPort": false
+    }
+  ]
+}
