@@ -13,7 +13,7 @@ that folder (`npm run deploy:dev`, `npm run deploy`, `npx vitest`, `npx eslint`)
 |---|---|---|
 | `apps/frontend/property-pub-react` | The React SPA (submodule) | `develop` |
 | `apps/backend/property-pub` | property-pub API + SSR (submodule) | `develop` |
-| `apps/backend/bizchat` | Messaging, department clients (submodule) | `feature/pc-map` |
+| `apps/backend/bizchat` | Messaging, department clients (submodule) | `develop` |
 | `packages/backend-shared/*` | Shared backend packages, e.g. `oauth` (submodules) | `develop` |
 
 Check the real branch with `git -C <path> branch --show-current`; these move. Outside this
